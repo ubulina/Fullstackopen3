@@ -3,6 +3,8 @@ const app = express() //luodaan express-sovellusta vastaava olio
 
 app.use(express.json())
 
+app.use(express.static('build')) //tarkistaa, löytyykö pyynnön polkua vastaavaa tiedostoa hakemistosta build
+
 const morgan = require('morgan')
 
 //app.use(morgan('tiny'))
