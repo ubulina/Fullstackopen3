@@ -1,11 +1,17 @@
-const express = require('express')
+require('dotenv').config() //otetaan ympäristömuuttujat käyttöön
+const express = require('express')//otetaan express käyttöön
 const app = express() //luodaan express-sovellusta vastaava olio
+const cors = require('cors') //sallitaan muista origineista tulevat pyynnöt cors-middlewarella
+const Person = require('./models/person')//otetaan käyttöön person-moduuli ja asetetaan se muuttujaan
+const { response } = require('express')
 
-app.use(express.json())
 
+app.use(express.json())//json-parseri käyttöön
 app.use(express.static('build')) //tarkistaa, löytyykö pyynnön polkua vastaavaa tiedostoa hakemistosta build
+app.use(cors())
 
 const morgan = require('morgan')
+const { Mongoose } = require('mongoose')
 
 //app.use(morgan('tiny'))
 
@@ -15,78 +21,62 @@ morgan.token('body', (request, response) => {
 
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 
-//sallitaan muista origineista tulevat pyynnöt cors-middlewarella
-const cors = require('cors')
-app.use(cors())
 
-let persons = [
+//middleware, joka tulostaa konsoliin palvelimelle tulevien pyyntöjen perustietoja
+const requestLogger = (request, response, next) => {
+    console.log('Method:', request.method)
+    console.log('Path:  ', request.path)
+    console.log('Body:  ', request.body)
+    console.log('---')
+    next()
+}
+  
+app.use(requestLogger)
 
-    { 
-        id: 1,
-        name: "Arto Hellas",
-        number: "040-123456" 
-    },
-    { 
-        id: 2,
-        name: "Ada Lovelace", 
-        number: "39-44-5323523" 
-    },
-    { 
-        id: 3,
-        name: "Dan Abramov", 
-        number: "12-43-234345"
-    },
-    { 
-        id: 4,
-        name: "Mary Poppendieck",
-        number: "39-23-6423122" 
-    }
 
-]
 
-//infosivu
-app.get('/info', (request, response) => {
-    const date = Date().toString();
-    response.send(`Phonebook has info for ${persons.length} people <p> ${date} </p>`)
-
+//INFOSIVU 
+app.get('/info', (request, response, next) => {
+    Person.countDocuments({}).then(count => {
+        const date = Date().toString()
+        response.send(`Phonebook has info for ${count} people <p> ${date} </p>`)
+    })
+    .catch(error => next(error))   
 })
 
-//hakee kaikki henkilöt
-app.get('/api/persons', (request, response) => {
-    response.json(persons)
-})
 
-//hakee yksittäisen henkilön
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id) 
 
-    if(person) {
-        response.json(person)
-
-    } else {
-        response.status(404).end()
-    }
+//HAKEE KAIKKI HENKILÖT TIETOKANNASTA
+app.get('/api/persons', (request, response, next) => {
+    Person.find({}).then(persons => {
+        response.json(persons)
+    })
+    .catch(error => next(error))
     
 })
 
 
+//HAKEE YKSITTÄISEN HENKILÖN TIETOKANNASTA
+app.get('/api/persons/:id', (request, response, next) => {
+    Person.findById(request.params.id)
+        .then(person => {
+            if(person) {
+                response.json(person)
+            } else {
+                response.status(404).end()
+            }        
+        })
+        .catch(error => next(error))
+})    
 
-//funktio, joka generoi id:n henkilölle
-const generateId = () => {
-    return Math.floor(Math.random() * (1000 - 5) + 5)    
-}
 
-//tutkitaan onko lisättävä nimi jo nimien listalla
-const findName = (newName) => {
-    const names = persons.map(person => person.name)
-    return names.includes(newName)
-}
 
-//lisää henkilön
-app.post('/api/persons', (request, response) => {
+//LISÄÄ UUDEN HENKILÖN TIETOKANTAAN
+app.post('/api/persons', (request, response, next) => {
 
     const body = request.body
+
+    console.log(body)
 
     if(!body.name) {
         return response.status(400).json({
@@ -100,36 +90,75 @@ app.post('/api/persons', (request, response) => {
         })
     }
 
-    //jos lisättävä nimi löytyy jo listalta, annetaan virheilmoitus
-    if(findName(body.name)){
-        return response.status (400).json({
-            error: 'name must be unique'
-        })
-
-    }
-
-    const person = {
-        id: generateId(),
+ 
+    //luodaan uusi henkilö-olio Person-konstruktorifunktiolla
+    const person = new Person({
+        //id: generateId(),
         name: body.name,
         number: body.number
+    })
+
+    //persons = persons.concat(person)
+    
+    //talletetaan henkilö tietokantaan
+    //vastaanotettu data palautetaan pyynnön vastauksessa
+    person.save().then(savedPerson => {
+        response.json(savedPerson)
+    })
+    .catch(error => next(error))
+    
+})
+
+//PÄIVITTÄÄ HENKILÖN UUDEN NUMERON TIETOKANTAAN
+app.put('/api/persons/:id', (request, response, next) => {
+    const body = request.body
+
+    const person = {
+        name: body.name,
+        number: body.number,
     }
 
-    persons = persons.concat(person)
-    
-    //vastaanotettu data palautetaan pyynnön vastauksessa
-    response.json(person)
+    Person.findByIdAndUpdate(request.params.id, person, { new: true })
+        .then(updatedPerson => {
+            response.json(updatedPerson)
+        })
+        .catch(error => next(error))
 })
 
-//poistaa yksittäisen henkilön
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    persons = persons.filter(person => person.id !== id)
-
-    response.status(204).end()
-
+//POISTAA YKSITTÄISEN HENKILÖN TIETOKANNASTA
+app.delete('/api/persons/:id', (request, response, next) => {
+    Person.findByIdAndRemove(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))    
 })
 
-const PORT = process.env.PORT || 3001
+//olemattomien osoitteiden käsittely
+//määritellään ja otetaan käyttöön middleware, joka suoritetaan, jos mikään route ei käsittele http-pyyntöä
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+  
+app.use(unknownEndpoint)
+
+
+//määritellään virheidenkäsittelijä
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+
+    if(error.name === 'CastError') {
+        return response.status(400).send( { error: 'malformatted id'})
+    }
+
+    next(error)
+}
+
+
+//errorHandler-middleware otetaan käyttöön viimeisenä
+app.use(errorHandler)
+
+const PORT = process.env.PORT 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 })
