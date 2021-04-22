@@ -78,6 +78,7 @@ app.post('/api/persons', (request, response, next) => {
 
     console.log(body)
 
+/*    
     if(!body.name) {
         return response.status(400).json({
             error: 'name missing'
@@ -90,23 +91,23 @@ app.post('/api/persons', (request, response, next) => {
         })
     }
 
- 
+*/ 
     //luodaan uusi henkilö-olio Person-konstruktorifunktiolla
     const person = new Person({
         //id: generateId(),
         name: body.name,
         number: body.number
     })
-
-    //persons = persons.concat(person)
-    
+   
     //talletetaan henkilö tietokantaan
     //vastaanotettu data palautetaan pyynnön vastauksessa
-    person.save().then(savedPerson => {
-        response.json(savedPerson)
-    })
-    .catch(error => next(error))
-    
+    person
+        .save()
+        .then(savedPerson => savedPerson.toJSON()) 
+        .then(savedAndFormattedPerson => {
+            response.json(savedAndFormattedPerson)
+        })    
+        .catch(error => next(error))    
 })
 
 //PÄIVITTÄÄ HENKILÖN UUDEN NUMERON TIETOKANTAAN
@@ -117,6 +118,8 @@ app.put('/api/persons/:id', (request, response, next) => {
         name: body.name,
         number: body.number,
     }
+
+    console.log(person.name)
 
     Person.findByIdAndUpdate(request.params.id, person, { new: true })
         .then(updatedPerson => {
@@ -149,7 +152,9 @@ const errorHandler = (error, request, response, next) => {
 
     if(error.name === 'CastError') {
         return response.status(400).send( { error: 'malformatted id'})
-    }
+    } else if (error.name === 'ValidationError') {
+        return response.status(400).json({ error: error.message })
+    } 
 
     next(error)
 }
