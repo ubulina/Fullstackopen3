@@ -3,7 +3,7 @@ const express = require('express')//otetaan express käyttöön
 const app = express() //luodaan express-sovellusta vastaava olio
 const cors = require('cors') //sallitaan muista origineista tulevat pyynnöt cors-middlewarella
 const Person = require('./models/person')//otetaan käyttöön person-moduuli ja asetetaan se muuttujaan
-const { response } = require('express')
+
 
 
 app.use(express.json())//json-parseri käyttöön
@@ -11,7 +11,7 @@ app.use(express.static('build')) //tarkistaa, löytyykö pyynnön polkua vastaav
 app.use(cors())
 
 const morgan = require('morgan')
-const { Mongoose } = require('mongoose')
+
 
 //app.use(morgan('tiny'))
 
@@ -162,6 +162,7 @@ const errorHandler = (error, request, response, next) => {
 
 //errorHandler-middleware otetaan käyttöön viimeisenä
 app.use(errorHandler)
+
 
 const PORT = process.env.PORT 
 app.listen(PORT, () => {
